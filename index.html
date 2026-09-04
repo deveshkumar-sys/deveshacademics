@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Dr. Devesh Kumar — Business Analytics</title>
+<meta name="description" content="Dr. Devesh Kumar, Assistant Professor of Business Analytics at Jaipuria Institute of Management, Lucknow. Research in supply chain reliability, optimization, machine learning and Industry 4.0." />
+
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="banner">Editing mode — you are signed in. Changes save to your live site.</div>
+
+<header class="nav">
+  <div class="wrap nav-inner">
+    <span class="nav-name">Devesh Kumar</span>
+    <nav class="nav-links">
+      <a href="#education">Education</a>
+      <a href="#about">About</a>
+      <a href="#positions">Positions</a>
+      <a href="#conferences">Conferences</a>
+      <a href="#reviewing">Reviewing</a>
+      <a href="#awards">Awards</a>
+      <a href="#publications">Publications</a>
+      <button id="adminToggle" title="Sign in to edit">Sign in</button>
+    </nav>
+  </div>
+</header>
+
+<!-- HERO -->
+<div class="hero">
+  <svg class="hero-net" viewBox="0 0 940 300" preserveAspectRatio="xMidYMid slice" aria-hidden="true"></svg>
+  <div class="wrap">
+    <div class="hero-inner">
+      <div id="portraitHolder"></div>
+      <div>
+        <h1 id="heroName"></h1>
+        <p class="role" id="heroRole"></p>
+        <p class="place" id="heroPlace"></p>
+        <div class="quicklinks" id="heroLinks"></div>
+        <div class="adminctl"><button class="abtn" onclick="editProfile()">Edit profile &amp; photo</button></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<main>
+  <!-- 1. EDUCATION -->
+  <section class="block" id="education">
+    <div class="wrap">
+      <div class="sec-head"><h2>Education</h2><span class="count" id="c-education"></span></div>
+      <div class="timeline" id="list-education"></div>
+      <div class="adminctl"><button class="abtn add" onclick="openForm('education')">+ Add a degree</button></div>
+    </div>
+  </section>
+
+  <!-- 2. ABOUT / INTRODUCTION -->
+  <section class="block" id="about">
+    <div class="wrap">
+      <div class="sec-head"><h2>About</h2></div>
+      <div id="aboutBody"></div>
+      <div class="interests" id="interests"></div>
+    </div>
+  </section>
+
+  <!-- 3. POSITIONS -->
+  <section class="block" id="positions">
+    <div class="wrap">
+      <div class="sec-head"><h2>Academic positions</h2></div>
+      <div id="list-positions"></div>
+      <div class="adminctl"><button class="abtn add" onclick="openForm('positions')">+ Add a position</button></div>
+    </div>
+  </section>
+
+  <!-- 4. CONFERENCES -->
+  <section class="block" id="conferences">
+    <div class="wrap">
+      <div class="sec-head"><h2>Conferences &amp; workshops attended</h2><span class="count" id="c-conferences"></span></div>
+      <div id="list-conferences"></div>
+      <div class="adminctl"><button class="abtn add" onclick="openForm('conferences')">+ Add a conference</button></div>
+    </div>
+  </section>
+
+  <!-- 5. REVIEWING -->
+  <section class="block" id="reviewing">
+    <div class="wrap">
+      <div class="sec-head"><h2>Journal reviewing</h2><span class="count" id="c-reviewer_journals"></span></div>
+      <div class="grid2" id="list-reviewer_journals"></div>
+      <div class="adminctl"><button class="abtn add" onclick="openForm('reviewer_journals')">+ Add a journal</button></div>
+    </div>
+  </section>
+
+  <!-- 6. AWARDS -->
+  <section class="block" id="awards">
+    <div class="wrap">
+      <div class="sec-head"><h2>Awards &amp; fellowships</h2></div>
+      <div id="list-awards"></div>
+      <div class="adminctl"><button class="abtn add" onclick="openForm('awards')">+ Add an award</button></div>
+    </div>
+  </section>
+
+  <!-- 7. PUBLICATIONS -->
+  <section class="block" id="publications">
+    <div class="wrap">
+      <div class="sec-head"><h2>Publications</h2><span class="count" id="c-publications"></span></div>
+      <div class="filters" id="pubFilters"></div>
+      <div id="list-publications"></div>
+      <div class="adminctl"><button class="abtn add" onclick="openForm('publications')">+ Add a publication</button></div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span id="footName"></span>
+    <span>·</span>
+    <span id="footYear"></span>
+    <span>·</span>
+    <span id="signInLink">Owner sign-in</span>
+  </div>
+</footer>
+
+<div class="modal-bg" id="modalBg"><div class="modal" id="modalBody"></div></div>
+<div class="toast" id="toast"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
