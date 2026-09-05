@@ -24,6 +24,7 @@ const FALLBACK = {
     name: "Dr. Devesh Kumar",
     role: "Assistant Professor — Business Analytics",
     place: "Jaipuria Institute of Management, Lucknow",
+    tagline: "Resilient, reliable supply chains — powered by machine learning, optimization, and Industry 4.0.",
     photo_url: "",
     email: "devesh.kumar@jaipuria.ac.in",
     phone: "+91 7905311354",
@@ -195,8 +196,27 @@ function renderProfile(){
   const fac = p.faculty_url?`<a class="chip" href="${esc(p.faculty_url)}" target="_blank" rel="noopener">${icon('link')}Faculty page</a>`:"";
   const ph = p.phone?`<span class="chip">${icon('phone')}${esc(p.phone)}</span>`:"";
   document.getElementById("heroLinks").innerHTML=mail+sch+li+fac+ph;
+  renderHeroBanner(p);
   document.getElementById("aboutBody").innerHTML=(p.about||"").split(/\n\n+/).map(par=>`<p class="lead">${esc(par)}</p>`).join("");
   document.getElementById("interests").innerHTML=(p.interests||[]).map(t=>`<span class="tag">${esc(t)}</span>`).join("");
+}
+function renderHeroBanner(p){
+  const el=document.getElementById("heroBanner"); if(!el) return;
+  // key highlights derived from the live data
+  const pubs=DATA.publications||[];
+  const pubCount=pubs.length;
+  let topIF=0;
+  pubs.forEach(x=>{ (x.metrics||"").split("|").forEach(m=>{ const[k,v]=m.split(":"); if(k==="IF"){ const n=parseFloat(v); if(n>topIF) topIF=n; } }); });
+  const revCount=(DATA.reviewer_journals||[]).length;
+  const stats=[];
+  if(pubCount) stats.push([pubCount+"+","Publications"]);
+  if(topIF)   stats.push([topIF.toFixed(1),"Peak impact factor"]);
+  if(revCount) stats.push([revCount,"Journals reviewed"]);
+  const pillars=(p.interests||[]).slice(0,4).map(t=>`<span class="hb-pill">${esc(t)}</span>`).join("");
+  el.innerHTML=`
+    ${p.tagline?`<p class="hb-tagline">${esc(p.tagline)}</p>`:""}
+    ${stats.length?`<div class="hb-stats">${stats.map(([n,l])=>`<div class="hb-stat"><span class="hb-num">${esc(n)}</span><span class="hb-lab">${esc(l)}</span></div>`).join("")}</div>`:""}
+    ${pillars?`<div class="hb-pillars">${pillars}</div>`:""}`;
 }
 function adminRow(section,id){ return `<div class="row-admin"><button class="abtn" onclick="openForm('${section}','${id}')">Edit</button><button class="abtn del" onclick="removeItem('${section}','${id}')">Delete</button></div>`; }
 function setCount(section,n){ const el=document.getElementById("c-"+section); if(el) el.textContent=n+(n===1?" entry":" entries"); }
@@ -303,9 +323,9 @@ function icon(n){
   let s="";
   for(let i=0;i<N;i++)for(let j=i+1;j<N;j++){
     const d=Math.hypot(pts[i].x-pts[j].x,pts[i].y-pts[j].y);
-    if(d<128) s+=`<line x1="${pts[i].x.toFixed(1)}" y1="${pts[i].y.toFixed(1)}" x2="${pts[j].x.toFixed(1)}" y2="${pts[j].y.toFixed(1)}" stroke="#26428B" stroke-opacity="${(0.14*(1-d/128)).toFixed(3)}" stroke-width="1"/>`;
+    if(d<128) s+=`<line x1="${pts[i].x.toFixed(1)}" y1="${pts[i].y.toFixed(1)}" x2="${pts[j].x.toFixed(1)}" y2="${pts[j].y.toFixed(1)}" stroke="#9DB4FF" stroke-opacity="${(0.22*(1-d/128)).toFixed(3)}" stroke-width="1"/>`;
   }
-  for(const p of pts) s+=`<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="2.1" fill="#26428B" fill-opacity="0.28"/>`;
+  for(const p of pts) s+=`<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="2.1" fill="#B9C8FF" fill-opacity="0.5"/>`;
   svg.innerHTML=s;
 })();
 
@@ -376,6 +396,7 @@ async function importCV(){
 function editProfile(){
   const p=DATA.profile;
   const f=[["name","Full name","text"],["role","Title / designation","text"],["place","Institute","text"],
+    ["tagline","Research tagline (shown in the highlight banner)","text"],
     ["photo_url","Photo URL (paste an image link)","text"],["email","Email","text"],["phone","Phone","text"],
     ["scholar_url","Google Scholar URL","text"],["linkedin_url","LinkedIn URL","text"],["faculty_url","Faculty page URL","text"],
     ["about","About (blank line separates paragraphs)","textarea"],["interests","Research interests (comma separated)","textarea"]];
@@ -387,7 +408,7 @@ function editProfile(){
   document.getElementById("modalBg").classList.add("open");
 }
 async function saveProfile(){
-  const keys=["name","role","place","photo_url","email","phone","scholar_url","linkedin_url","faculty_url","about"];
+  const keys=["name","role","place","tagline","photo_url","email","phone","scholar_url","linkedin_url","faculty_url","about"];
   const patch={}; keys.forEach(k=>patch[k]=document.getElementById("pf_"+k).value);
   patch.interests=document.getElementById("pf_interests").value.split(",").map(s=>s.trim()).filter(Boolean);
   try{
