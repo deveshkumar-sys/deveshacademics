@@ -348,6 +348,19 @@ function toggleAdmin(){
 document.getElementById("adminToggle").addEventListener("click",toggleAdmin);
 document.getElementById("signInLink").addEventListener("click",openSignIn);
 
+/* ---- auto sign-out after 1 minute of inactivity ---- */
+let idleTimer=null;
+const IDLE_MS=60*1000;
+function resetIdle(){
+  if(idleTimer){ clearTimeout(idleTimer); idleTimer=null; }
+  if(!isSignedIn()) return;
+  idleTimer=setTimeout(()=>{
+    if(isSignedIn() && fb.ready){ fb.auth.signOut().then(()=>{ refreshAdminUI(); toast("Signed out after 1 minute of inactivity."); }); }
+  }, IDLE_MS);
+}
+["mousemove","mousedown","keydown","touchstart","scroll","click"].forEach(ev=>
+  document.addEventListener(ev,resetIdle,{passive:true}));
+
 function openSignIn(){
   const configured = fb.ready;
   const body=document.getElementById("modalBody");
@@ -368,7 +381,7 @@ async function doSignIn(){
   const btn=document.getElementById("siBtn"); if(btn){ btn.disabled=true; btn.textContent="Signing in…"; }
   try{
     await fb.auth.signInWithEmailAndPassword(email,password);
-    closeModal(); refreshAdminUI(); toast("Signed in — editing unlocked.");
+    closeModal(); refreshAdminUI(); resetIdle(); toast("Signed in — editing unlocked.");
     if(await loadLive()) renderAll();  // refresh with live data now that we're in
   }catch(e){
     if(btn){ btn.disabled=false; btn.textContent="Sign in"; }
@@ -463,5 +476,5 @@ async function removeItem(section,id){
   renderAll();
   refreshAdminUI();
   // Firebase restores a previous sign-in asynchronously; update the UI when it does.
-  if(fb.ready){ fb.auth.onAuthStateChanged(async ()=>{ refreshAdminUI(); if(isSignedIn() && await loadLive()) renderAll(); }); }
+  if(fb.ready){ fb.auth.onAuthStateChanged(async ()=>{ refreshAdminUI(); resetIdle(); if(isSignedIn() && await loadLive()) renderAll(); }); }
 })();
