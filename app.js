@@ -6,12 +6,12 @@
 const FIREBASE_CONFIG = {
   // Paste the object Firebase gives you (Project settings -> Your apps -> Web).
   // These values are NOT secret; your data is protected by security rules.
-  apiKey: "",
-  authDomain: "",
-  projectId: "",
-  storageBucket: "",
-  messagingSenderId: "",
-  appId: ""
+  apiKey: "AIzaSyBQc7AN18YahWlMU4jOLYCL_6OSZKArncI",
+  authDomain: "academicprofile-35588.firebaseapp.com",
+  projectId: "academicprofile-35588",
+  storageBucket: "academicprofile-35588.firebasestorage.app",
+  messagingSenderId: "505914124477",
+  appId: "1:505914124477:web:afbafd7499b2b1d6572fd4"
 };
 
 
