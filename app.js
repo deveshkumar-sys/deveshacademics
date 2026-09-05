@@ -4,11 +4,11 @@
    Full instructions are in SETUP.md
    ===================================================================== */
 const CONFIG = {
-  // Your Neon Data API base URL, e.g. "https://ep-xxxx.apirest.c-2.us-east-2.aws.neon.tech"
-  neonDataApiUrl: "",
-  // Your Neon Data API publishable / anon key (safe to put here — read only)
+  // Your Neon Data API base URL (already filled in for you).
+  neonDataApiUrl: "https://ep-dawn-hall-aw7y7aee.apirest.c-12.us-east-1.aws.neon.tech/neondb/rest/v1",
+  // Neon reads run as the public "anonymous" role and need NO key — leave this blank.
   publishableKey: "",
-  // Optional: Neon Auth base URL (only if you use email/password login instead of a paste-in edit key)
+  // Filled in later when we set up your owner login.
   authUrl: ""
 };
 
@@ -135,16 +135,21 @@ function apiHeaders(write){
   if(write) h["Prefer"]="return=representation";
   return h;
 }
-async function apiGet(table){
-  const r=await fetch(`${CONFIG.neonDataApiUrl}/${table}?order=sort_order.asc`,{headers:apiHeaders(false)});
+async function apiGet(table,order="sort_order"){
+  const url = order ? `${CONFIG.neonDataApiUrl}/${table}?order=${order}.asc` : `${CONFIG.neonDataApiUrl}/${table}`;
+  const r=await fetch(url,{headers:apiHeaders(false)});
   if(!r.ok) throw new Error(table+" "+r.status);
   return r.json();
 }
 async function loadLive(){
-  if(!CONFIG.neonDataApiUrl || !CONFIG.publishableKey) return false;
+  if(!CONFIG.neonDataApiUrl) return false;
   try{
     const [profileArr,education,positions,conferences,reviewer_journals,awards,publications] =
-      await Promise.all(["profile","education","positions","conferences","reviewer_journals","awards","publications"].map(apiGet));
+      await Promise.all([
+        apiGet("profile",null),
+        apiGet("education"),apiGet("positions"),apiGet("conferences"),
+        apiGet("reviewer_journals"),apiGet("awards"),apiGet("publications")
+      ]);
     DATA = {profile:profileArr[0]||FALLBACK.profile, education,positions,conferences,reviewer_journals,awards,publications};
     return true;
   }catch(e){ console.warn("Neon unreachable, using built-in copy:",e.message); return false; }
@@ -300,7 +305,7 @@ document.getElementById("adminToggle").addEventListener("click",toggleAdmin);
 document.getElementById("signInLink").addEventListener("click",openSignIn);
 
 function openSignIn(){
-  const configured = CONFIG.neonDataApiUrl && CONFIG.publishableKey;
+  const configured = !!CONFIG.neonDataApiUrl;
   const body=document.getElementById("modalBody");
   body.innerHTML=`<h3>Owner sign-in</h3>
     <p class="sub">${configured?"Paste your edit key to unlock editing. It stays only in this browser tab and is never stored in the site.":"Neon isn’t connected yet, so live editing is off. Add your Neon details in the CONFIG block at the top of index.html (see SETUP.md), then reload."}</p>
