@@ -1,16 +1,19 @@
 /* =====================================================================
-   CONFIG — edit these values after you create your Neon project.
-   Leave them blank to run the site from the built-in CV copy.
-   Full instructions are in SETUP.md
+   CONFIG — paste your Firebase web config here after creating the project.
+   Leave it blank to run the site from the built-in CV copy.
+   Full instructions are in FIREBASE_SETUP.md
    ===================================================================== */
-const CONFIG = {
-  // Your Neon Data API base URL (already filled in for you).
-  neonDataApiUrl: "https://ep-dawn-hall-aw7y7aee.apirest.c-12.us-east-1.aws.neon.tech/neondb/rest/v1",
-  // Neon reads run as the public "anonymous" role and need NO key — leave this blank.
-  publishableKey: "",
-  // Filled in later when we set up your owner login.
-  authUrl: ""
+const FIREBASE_CONFIG = {
+  // Paste the object Firebase gives you (Project settings -> Your apps -> Web).
+  // These values are NOT secret; your data is protected by security rules.
+  apiKey: "",
+  authDomain: "",
+  projectId: "",
+  storageBucket: "",
+  messagingSenderId: "",
+  appId: ""
 };
+
 
 /* =====================================================================
    BUILT-IN CV COPY  (fallback + initial seed for your Neon database)
@@ -123,37 +126,55 @@ const SCHEMA = {
 const PUB_KINDS=[["all","All"],["journal","Journal articles"],["conference","Conference papers"],["book","Books & chapters"],["other","Other"]];
 
 let DATA = JSON.parse(JSON.stringify(FALLBACK));  // active copy
-let LIVE = false;                                  // reading from Neon?
+let LIVE = false;                                  // reading from the live database?
 let pubFilter = "all";
 const esc = s => (s==null?"":String(s)).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 
-/* ---------- Neon Data API helpers ---------- */
-function apiHeaders(write){
-  const h={"Content-Type":"application/json"};
-  const tok = write ? sessionStorage.getItem("editKey") : CONFIG.publishableKey;
-  if(tok){ h["Authorization"]="Bearer "+tok; h["apikey"]=tok; }
-  if(write) h["Prefer"]="return=representation";
-  return h;
-}
-async function apiGet(table,order="sort_order"){
-  const url = order ? `${CONFIG.neonDataApiUrl}/${table}?order=${order}.asc` : `${CONFIG.neonDataApiUrl}/${table}`;
-  const r=await fetch(url,{headers:apiHeaders(false)});
-  if(!r.ok) throw new Error(table+" "+r.status);
-  return r.json();
-}
-async function loadLive(){
-  if(!CONFIG.neonDataApiUrl) return false;
+/* ---------- Firebase (data + login) ----------
+   Reads are public (security rules allow anyone to read).
+   Writes require you to be signed in as the owner (rules enforce it). */
+const COLLECTIONS = ["education","positions","conferences","reviewer_journals","awards","publications"];
+let fb = { ready:false, db:null, auth:null };
+
+function initFirebase(){
   try{
-    const [profileArr,education,positions,conferences,reviewer_journals,awards,publications] =
-      await Promise.all([
-        apiGet("profile",null),
-        apiGet("education"),apiGet("positions"),apiGet("conferences"),
-        apiGet("reviewer_journals"),apiGet("awards"),apiGet("publications")
-      ]);
-    DATA = {profile:profileArr[0]||FALLBACK.profile, education,positions,conferences,reviewer_journals,awards,publications};
+    if(!FIREBASE_CONFIG.projectId || typeof firebase==="undefined") return false;
+    firebase.initializeApp(FIREBASE_CONFIG);
+    fb.db = firebase.firestore();
+    fb.auth = firebase.auth();
+    fb.ready = true;
     return true;
-  }catch(e){ console.warn("Neon unreachable, using built-in copy:",e.message); return false; }
+  }catch(e){ console.warn("Firebase init failed, using built-in copy:",e.message); return false; }
 }
+
+async function loadLive(){
+  if(!fb.ready) return false;
+  try{
+    const out={};
+    const profSnap = await fb.db.collection("profile").doc("main").get();
+    out.profile = profSnap.exists ? {id:"main", ...profSnap.data()} : FALLBACK.profile;
+    await Promise.all(COLLECTIONS.map(async c=>{
+      const snap = await fb.db.collection(c).orderBy("sort_order").get();
+      out[c] = snap.docs.map(d=>({id:d.id, ...d.data()}));
+    }));
+    // if the database is empty, keep showing the built-in copy
+    const empty = COLLECTIONS.every(c=>out[c].length===0);
+    if(empty && !profSnap.exists) return false;
+    DATA = {profile:out.profile, education:out.education||[], positions:out.positions||[],
+            conferences:out.conferences||[], reviewer_journals:out.reviewer_journals||[],
+            awards:out.awards||[], publications:out.publications||[]};
+    return true;
+  }catch(e){ console.warn("Firestore read failed, using built-in copy:",e.message); return false; }
+}
+
+// Write one document (used by the editor and the one-time import).
+async function fbSet(collection, id, data){
+  if(collection==="profile") return fb.db.collection("profile").doc("main").set(data,{merge:true});
+  if(id!=null && String(id).indexOf("local_")!==0) return fb.db.collection(collection).doc(String(id)).set(data,{merge:true});
+  const ref = await fb.db.collection(collection).add(data);
+  return ref.id;
+}
+async function fbDelete(collection, id){ return fb.db.collection(collection).doc(String(id)).delete(); }
 
 /* ---------- render ---------- */
 function renderAll(){ renderProfile(); renderEducation(); renderPositions(); renderConferences(); renderReviewers(); renderAwards(); renderPublications(); }
@@ -177,7 +198,7 @@ function renderProfile(){
   document.getElementById("aboutBody").innerHTML=(p.about||"").split(/\n\n+/).map(par=>`<p class="lead">${esc(par)}</p>`).join("");
   document.getElementById("interests").innerHTML=(p.interests||[]).map(t=>`<span class="tag">${esc(t)}</span>`).join("");
 }
-function adminRow(section,id){ return `<div class="row-admin"><button class="abtn" onclick="openForm('${section}',${id})">Edit</button><button class="abtn del" onclick="removeItem('${section}',${id})">Delete</button></div>`; }
+function adminRow(section,id){ return `<div class="row-admin"><button class="abtn" onclick="openForm('${section}','${id}')">Edit</button><button class="abtn del" onclick="removeItem('${section}','${id}')">Delete</button></div>`; }
 function setCount(section,n){ const el=document.getElementById("c-"+section); if(el) el.textContent=n+(n===1?" entry":" entries"); }
 
 function renderEducation(){
@@ -289,35 +310,67 @@ function icon(n){
 })();
 
 /* =====================================================================
-   ADMIN — sign in, forms, create / update / delete via Neon Data API
+   ADMIN — sign in with Firebase (only your account), then add/edit/delete
    ===================================================================== */
 function toast(msg){ const t=document.getElementById("toast"); t.textContent=msg; t.classList.add("show"); setTimeout(()=>t.classList.remove("show"),2600); }
 function closeModal(){ document.getElementById("modalBg").classList.remove("open"); document.getElementById("modalBody").innerHTML=""; }
 document.getElementById("modalBg").addEventListener("click",e=>{ if(e.target.id==="modalBg") closeModal(); });
 
-function isSignedIn(){ return !!sessionStorage.getItem("editKey"); }
+function isSignedIn(){ return !!(fb.ready && fb.auth && fb.auth.currentUser); }
 function refreshAdminUI(){
   const on=isSignedIn(); document.body.classList.toggle("admin",on);
   const b=document.getElementById("adminToggle"); b.textContent=on?"Signed in — sign out":"Sign in"; b.classList.toggle("on",on);
 }
-function toggleAdmin(){ if(isSignedIn()){ sessionStorage.removeItem("editKey"); refreshAdminUI(); toast("Signed out."); } else openSignIn(); }
+function toggleAdmin(){
+  if(isSignedIn()){ fb.auth.signOut().then(()=>{ refreshAdminUI(); toast("Signed out."); }); }
+  else openSignIn();
+}
 document.getElementById("adminToggle").addEventListener("click",toggleAdmin);
 document.getElementById("signInLink").addEventListener("click",openSignIn);
 
 function openSignIn(){
-  const configured = !!CONFIG.neonDataApiUrl;
+  const configured = fb.ready;
   const body=document.getElementById("modalBody");
   body.innerHTML=`<h3>Owner sign-in</h3>
-    <p class="sub">${configured?"Paste your edit key to unlock editing. It stays only in this browser tab and is never stored in the site.":"Neon isn’t connected yet, so live editing is off. Add your Neon details in the CONFIG block at the top of index.html (see SETUP.md), then reload."}</p>
-    ${configured?`<div class="field"><label>Edit key</label><input id="editKeyInput" type="password" placeholder="Your Neon edit key" autocomplete="off"></div>
-      <div class="modal-actions"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="doSignIn()">Unlock editing</button></div>`
+    <p class="sub">${configured?"Sign in with your email and password to edit this site.":"Firebase isn’t connected yet. Paste your Firebase config into app.js (see FIREBASE_SETUP.md), then reload."}</p>
+    ${configured?`<div class="field"><label>Email</label><input id="siUser" type="email" autocomplete="username"></div>
+      <div class="field"><label>Password</label><input id="siPass" type="password" autocomplete="current-password"></div>
+      <div class="modal-actions"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn primary" id="siBtn" onclick="doSignIn()">Sign in</button></div>`
     :`<div class="modal-actions"><button class="btn primary" onclick="closeModal()">Got it</button></div>`}`;
   document.getElementById("modalBg").classList.add("open");
-  const i=document.getElementById("editKeyInput"); if(i){ i.focus(); i.addEventListener("keydown",e=>{if(e.key==="Enter")doSignIn();}); }
+  const u=document.getElementById("siUser"); const p=document.getElementById("siPass");
+  if(u){ u.focus(); [u,p].forEach(el=>el.addEventListener("keydown",e=>{if(e.key==="Enter")doSignIn();})); }
 }
-function doSignIn(){
-  const v=document.getElementById("editKeyInput").value.trim(); if(!v) return;
-  sessionStorage.setItem("editKey",v); closeModal(); refreshAdminUI(); toast("Editing unlocked."); 
+async function doSignIn(){
+  const email=(document.getElementById("siUser").value||"").trim();
+  const password=document.getElementById("siPass").value||"";
+  if(!email||!password) return;
+  const btn=document.getElementById("siBtn"); if(btn){ btn.disabled=true; btn.textContent="Signing in…"; }
+  try{
+    await fb.auth.signInWithEmailAndPassword(email,password);
+    closeModal(); refreshAdminUI(); toast("Signed in — editing unlocked.");
+    if(await loadLive()) renderAll();  // refresh with live data now that we're in
+  }catch(e){
+    if(btn){ btn.disabled=false; btn.textContent="Sign in"; }
+    toast("Invalid email or password.");
+  }
+}
+
+// One-time: copy the built-in CV into your empty database.
+async function importCV(){
+  if(!isSignedIn()){ toast("Sign in first."); return; }
+  if(!confirm("Load the built-in CV into your database? This fills any empty sections; it won't create duplicates.")) return;
+  try{
+    const prof=await fb.db.collection("profile").doc("main").get();
+    if(!prof.exists){ const {id,...pdata}=FALLBACK.profile; await fb.db.collection("profile").doc("main").set(pdata); }
+    for(const c of COLLECTIONS){
+      const snap=await fb.db.collection(c).limit(1).get();
+      if(!snap.empty) continue; // already has data — skip
+      for(const item of FALLBACK[c]){ const {id,...d}=item; await fb.db.collection(c).add(d); }
+    }
+    toast("Imported. Loading…");
+    if(await loadLive()) renderAll();
+  }catch(e){ toast("Import failed: "+(e.message||e)); }
 }
 
 function editProfile(){
@@ -337,14 +390,16 @@ async function saveProfile(){
   const keys=["name","role","place","photo_url","email","phone","scholar_url","linkedin_url","faculty_url","about"];
   const patch={}; keys.forEach(k=>patch[k]=document.getElementById("pf_"+k).value);
   patch.interests=document.getElementById("pf_interests").value.split(",").map(s=>s.trim()).filter(Boolean);
-  if(LIVE){ try{ await fetch(`${CONFIG.neonDataApiUrl}/profile?id=eq.1`,{method:"PATCH",headers:apiHeaders(true),body:JSON.stringify(patch)}); }catch(e){ toast("Save failed — check your edit key."); return; } }
-  DATA.profile={...DATA.profile,...patch}; closeModal(); renderProfile(); toast("Profile saved.");
+  try{
+    if(isSignedIn()){ await fbSet("profile","main",patch); }
+    DATA.profile={...DATA.profile,...patch}; closeModal(); renderProfile(); toast("Profile saved.");
+  }catch(e){ toast(e.message||"Save failed."); }
 }
 
 function openForm(section,id){
-  const sch=SCHEMA[section]; const item=id!=null?DATA[section].find(x=>x.id===id):null;
+  const sch=SCHEMA[section]; const item=id!=null?DATA[section].find(x=>String(x.id)===String(id)):null;
   const body=document.getElementById("modalBody");
-  body.innerHTML=`<h3>${item?"Edit":"Add"} — ${section.replace(/_/g,' ')}</h3><p class="sub">${LIVE?"Saves to your live site.":"Neon isn’t connected, so this previews the change in this browser only."}</p>`+
+  body.innerHTML=`<h3>${item?"Edit":"Add"} — ${section.replace(/_/g,' ')}</h3><p class="sub">${isSignedIn()?"Saves to your live site.":"Preview only — sign in to save changes."}</p>`+
     sch.fields.map(f=>{
       const val=item?item[f.k]:(f.k==="sort_order"?(DATA[section].length+1):"");
       if(f.type==="bool") return `<div class="field"><label>${f.label}</label><select id="ff_${f.k}"><option value="false" ${!val?'selected':''}>No</option><option value="true" ${val?'selected':''}>Yes</option></select></div>`;
@@ -352,7 +407,7 @@ function openForm(section,id){
       if(f.type==="textarea") return `<div class="field"><label>${f.label}</label><textarea id="ff_${f.k}">${esc(val)}</textarea></div>`;
       return `<div class="field"><label>${f.label}</label><input id="ff_${f.k}" type="${f.type==='number'?'number':'text'}" value="${esc(val)}"></div>`;
     }).join("")+
-    `<div class="modal-actions"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="saveItem('${section}',${id!=null?id:'null'})">Save</button></div>`;
+    `<div class="modal-actions"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="saveItem('${section}',${id!=null?`'${id}'`:'null'})">Save</button></div>`;
   document.getElementById("modalBg").classList.add("open");
 }
 async function saveItem(section,id){
@@ -362,27 +417,30 @@ async function saveItem(section,id){
     if(f.type==="bool") v=(v==="true");
     obj[f.k]=v; });
   try{
-    if(LIVE){
-      if(id!=null){ const r=await fetch(`${CONFIG.neonDataApiUrl}/${sch.table}?id=eq.${id}`,{method:"PATCH",headers:apiHeaders(true),body:JSON.stringify(obj)}); if(!r.ok) throw 0; }
-      else{ const r=await fetch(`${CONFIG.neonDataApiUrl}/${sch.table}`,{method:"POST",headers:apiHeaders(true),body:JSON.stringify(obj)}); if(!r.ok) throw 0; const [row]=await r.json(); obj.id=row.id; }
-    } else if(id==null){ obj.id=Math.max(0,...DATA[section].map(x=>x.id))+1; }
-    if(id!=null){ const i=DATA[section].findIndex(x=>x.id===id); DATA[section][i]={...DATA[section][i],...obj}; }
+    if(isSignedIn()){
+      const newId=await fbSet(sch.table, id, obj);
+      if(id==null) obj.id=newId;
+    } else if(id==null){ obj.id="local_"+Date.now(); }
+    if(id!=null){ const i=DATA[section].findIndex(x=>String(x.id)===String(id)); if(i>=0) DATA[section][i]={...DATA[section][i],...obj}; }
     else DATA[section].push(obj);
     DATA[section].sort((a,b)=>(a.sort_order||0)-(b.sort_order||0));
     closeModal(); renderAll(); toast("Saved.");
-  }catch(e){ toast("Save failed — check your edit key and connection."); }
+  }catch(e){ toast(e.message||"Save failed."); }
 }
 async function removeItem(section,id){
   if(!confirm("Delete this entry? This cannot be undone.")) return;
   try{
-    if(LIVE){ const r=await fetch(`${CONFIG.neonDataApiUrl}/${SCHEMA[section].table}?id=eq.${id}`,{method:"DELETE",headers:apiHeaders(true)}); if(!r.ok) throw 0; }
-    DATA[section]=DATA[section].filter(x=>x.id!==id); renderAll(); toast("Deleted.");
-  }catch(e){ toast("Delete failed — check your edit key."); }
+    if(isSignedIn()){ await fbDelete(SCHEMA[section].table,id); }
+    DATA[section]=DATA[section].filter(x=>String(x.id)!==String(id)); renderAll(); toast("Deleted.");
+  }catch(e){ toast(e.message||"Delete failed."); }
 }
 
 /* ---------- boot ---------- */
 (async function boot(){
+  initFirebase();
   LIVE=await loadLive();
   renderAll();
   refreshAdminUI();
+  // Firebase restores a previous sign-in asynchronously; update the UI when it does.
+  if(fb.ready){ fb.auth.onAuthStateChanged(async ()=>{ refreshAdminUI(); if(isSignedIn() && await loadLive()) renderAll(); }); }
 })();

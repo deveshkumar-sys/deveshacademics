@@ -44,7 +44,7 @@
         <p class="role" id="heroRole"></p>
         <p class="place" id="heroPlace"></p>
         <div class="quicklinks" id="heroLinks"></div>
-        <div class="adminctl"><button class="abtn" onclick="editProfile()">Edit profile &amp; photo</button></div>
+        <div class="adminctl"><button class="abtn" onclick="editProfile()">Edit profile &amp; photo</button><button class="abtn" onclick="importCV()">Import built-in CV to database</button></div>
       </div>
     </div>
   </div>
@@ -129,6 +129,10 @@
 <div class="modal-bg" id="modalBg"><div class="modal" id="modalBody"></div></div>
 <div class="toast" id="toast"></div>
 
+<!-- Firebase (data + login). These load from Google's CDN. -->
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
