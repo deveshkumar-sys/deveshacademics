@@ -187,3 +187,63 @@ footer .wrap{display:flex;flex-wrap:wrap;gap:8px 20px;align-items:center}
   .lead{text-align:left}
 }
 @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}.hero-net{display:none}.row,.pub,.tl-item,.jrow{transition:none}}
+
+/* ===================== COURSES ===================== */
+.courses-sub{font-family:var(--serif);font-size:20px;font-weight:600;margin:8px 0 6px;color:var(--ink)}
+.courses-sub.past{margin-top:36px}
+.courses-hint{font-size:14px;color:var(--ink-soft);margin:0 0 18px}
+.empty-note{font-size:14.5px;color:var(--ink-faint);font-style:italic;margin:6px 0}
+.course-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;margin-bottom:8px}
+.course-card{position:relative;background:var(--panel);border:1px solid var(--hair);border-radius:var(--radius);box-shadow:var(--shadow);padding:20px 22px;overflow:hidden;transition:transform .18s ease, box-shadow .18s ease, border-color .18s ease}
+.course-card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--accent);opacity:.85}
+.course-card.present{cursor:pointer}
+.course-card.present:hover{transform:translateY(-3px);box-shadow:var(--shadow-hi);border-color:var(--hair-strong)}
+.course-card.past{background:#fbfbf8;opacity:.92}
+.course-card.past::before{background:var(--ink-faint)}
+.cc-name{font-family:var(--serif);font-size:19px;font-weight:600;margin:0}
+.cc-term{font-size:13.5px;color:var(--ink-soft);margin:4px 0 0}
+.cc-open{display:inline-block;margin-top:12px;font-size:13.5px;font-weight:700;color:var(--accent)}
+.cc-tag{display:inline-block;margin-top:12px;font-size:12px;font-weight:600;color:var(--ink-faint);background:#efefe9;border-radius:7px;padding:3px 9px}
+
+/* course dashboard */
+.course-view{padding:44px 0 60px;background:var(--paper);border-top:1px solid var(--hair)}
+.back-link{background:none;border:none;color:var(--accent);font-family:var(--sans);font-size:14px;font-weight:600;cursor:pointer;padding:0;margin-bottom:14px}
+.back-link:hover{text-decoration:underline}
+.cv-title{font-family:var(--serif);font-size:30px;font-weight:700;margin:0 0 4px}
+.cv-term{color:var(--ink-soft);font-size:15px;margin:0 0 6px}
+.cv-desc{color:var(--ink);font-size:16px;max-width:74ch;margin:0 0 22px}
+
+/* accordion */
+.accordion{display:flex;flex-direction:column;gap:12px}
+.acc-item{background:var(--panel);border:1px solid var(--hair);border-radius:12px;box-shadow:var(--shadow);overflow:hidden}
+.acc-head{display:flex;align-items:center;gap:14px;padding:16px 20px;cursor:pointer;user-select:none}
+.acc-head:hover{background:#fcfcfa}
+.acc-num{flex:none;width:30px;height:30px;border-radius:8px;background:var(--accent-wash);color:var(--accent-deep);font-weight:700;font-size:14px;display:flex;align-items:center;justify-content:center}
+.acc-title{flex:1;font-weight:600;font-size:16.5px;min-width:0}
+.acc-chev{flex:none;color:var(--ink-faint);font-size:22px;transition:transform .2s ease;line-height:1}
+.acc-item.open .acc-chev{transform:rotate(90deg)}
+.acc-body{display:none;padding:4px 20px 20px 64px;border-top:1px solid var(--hair)}
+.acc-item.open .acc-body{display:block}
+.sess-desc{font-size:15px;color:var(--ink);margin:14px 0 8px}
+.sess-kc{font-size:14px;color:var(--ink-soft);margin:0 0 14px}
+.sess-kc strong{color:var(--ink)}
+
+/* resources */
+.res-list{display:flex;flex-direction:column;gap:8px;margin-top:6px}
+.res-row{display:flex;align-items:center;gap:10px;justify-content:space-between}
+.res-link{display:flex;align-items:center;gap:12px;flex:1;min-width:0;padding:11px 14px;border:1px solid var(--hair);border-radius:10px;background:var(--paper);text-decoration:none;transition:border-color .15s, background .15s}
+.res-link:hover{border-color:var(--accent);background:var(--accent-wash);text-decoration:none}
+.res-ic{font-size:20px;flex:none;line-height:1}
+.res-main{display:flex;flex-direction:column;min-width:0}
+.res-title{font-weight:600;font-size:15px;color:var(--ink)}
+.res-desc{font-size:13px;color:var(--ink-soft)}
+.res-admin{display:none;gap:6px;flex:none}
+body.admin .res-admin{display:flex}
+.course-admin{display:none;margin-top:16px}
+body.admin .course-admin{display:block}
+
+@media (max-width:720px){
+  .course-grid{grid-template-columns:1fr}
+  .acc-body{padding-left:20px}
+  .cv-title{font-size:24px}
+}

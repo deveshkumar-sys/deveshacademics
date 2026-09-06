@@ -91,6 +91,18 @@ const FALLBACK = {
     {id:19, sort_order:19, kind:"other", year:2025, title:"Control chart-based predictive maintenance in flexible manufacturing systems: A data-driven approach", authors:"Kumawat, M.K., Kumar, D., Rathore, S., Mangla, S.K., Mohanty, R.P.", venue:"Industrial Engineering Journal, XVIII(8)", metrics:"", url:"https://scholar.google.com/scholar?q=Control+chart-based+predictive+maintenance+in+flexible+manufacturing+systems"},
     {id:20, sort_order:20, kind:"other", year:2025, title:"Industry 4.0 and Supply Chain Resilience: A Comprehensive Analysis of Technological Impacts", authors:"Kumar, D., Soni, G.", venue:"IETI Transactions on Data Analysis and Forecasting, 3(2), 33–49", metrics:"", url:"https://scholar.google.com/scholar?q=Industry+4.0+and+Supply+Chain+Resilience+Comprehensive+Analysis+of+Technological+Impacts"},
     {id:21, sort_order:21, kind:"other", year:2024, title:"Improved demand forecasting of a retail store using a hybrid machine learning model", authors:"Taparia, V., Mishra, P., Gupta, N., Kumar, D.", venue:"Journal of Graphic Era University, 15–36", metrics:"", url:"https://scholar.google.com/scholar?q=Improved+demand+forecasting+of+a+retail+store+using+a+hybrid+machine+learning+model"}
+  ],
+  courses: [
+    {id:"sample-ba", sort_order:1, status:"present", name:"Python for Business Analytics", term:"Current term", description:"Hands-on introduction to analytics with Python.", sessions:[
+      {id:"s1", sort_order:1, number:1, title:"Introduction to Business Analytics", description:"What analytics is and why it matters for decision-making.", key_concepts:"Descriptive, predictive and prescriptive analytics", resources:[
+        {id:"r1", sort_order:1, title:"📊 Introduction – Lecture Slides", description:"Overview deck for Session 1", url:""}
+      ]},
+      {id:"s2", sort_order:2, number:2, title:"Data and Decision Making", description:"Turning raw data into decisions.", key_concepts:"Data types, quality, exploratory analysis", resources:[
+        {id:"r2", sort_order:1, title:"📊 Lecture Slides", description:"", url:""},
+        {id:"r3", sort_order:2, title:"📁 Practice Dataset", description:"Customer dataset for the exercise", url:""}
+      ]}
+    ]},
+    {id:"sample-past", sort_order:2, status:"past", name:"Foundations of Data Science", term:"2024", sessions:[]}
   ]
 };
 
@@ -161,9 +173,12 @@ async function loadLive(){
     // if the database is empty, keep showing the built-in copy
     const empty = COLLECTIONS.every(c=>out[c].length===0);
     if(empty && !profSnap.exists) return false;
+    // courses (names + status are public)
+    let courses=[];
+    try{ const cs=await fb.db.collection("courses").orderBy("sort_order").get(); courses=cs.docs.map(d=>({id:d.id,...d.data()})); }catch(e){ courses=DATA.courses||[]; }
     DATA = {profile:out.profile, education:out.education||[], positions:out.positions||[],
             conferences:out.conferences||[], reviewer_journals:out.reviewer_journals||[],
-            awards:out.awards||[], publications:out.publications||[]};
+            awards:out.awards||[], publications:out.publications||[], courses:courses};
     return true;
   }catch(e){ console.warn("Firestore read failed, using built-in copy:",e.message); return false; }
 }
@@ -178,7 +193,7 @@ async function fbSet(collection, id, data){
 async function fbDelete(collection, id){ return fb.db.collection(collection).doc(String(id)).delete(); }
 
 /* ---------- render ---------- */
-function renderAll(){ renderProfile(); renderEducation(); renderPositions(); renderConferences(); renderReviewers(); renderAwards(); renderPublications(); }
+function renderAll(){ renderProfile(); renderEducation(); renderPositions(); renderConferences(); renderReviewers(); renderAwards(); renderPublications(); renderCourses(); }
 
 function renderProfile(){
   const p=DATA.profile;
@@ -336,17 +351,61 @@ function toast(msg){ const t=document.getElementById("toast"); t.textContent=msg
 function closeModal(){ document.getElementById("modalBg").classList.remove("open"); document.getElementById("modalBody").innerHTML=""; }
 document.getElementById("modalBg").addEventListener("click",e=>{ if(e.target.id==="modalBg") closeModal(); });
 
-function isSignedIn(){ return !!(fb.ready && fb.auth && fb.auth.currentUser); }
+/* ---- roles: admin (you) edits everything; Jaipuria students view course content ---- */
+const ADMIN_EMAIL="deveshkumar1993@gmail.com";
+function currentUser(){ return (fb.ready && fb.auth) ? fb.auth.currentUser : null; }
+function isAdmin(){ const u=currentUser(); return !!(u && (u.email||"").toLowerCase()===ADMIN_EMAIL); }
+function isStudent(){ const u=currentUser(); return !!(u && /@jaipuria\.ac\.in$/i.test(u.email||"")); }
+function canViewCourse(){ return isAdmin()||isStudent(); }
+// "signed in" for the site's editing controls means the ADMIN is signed in
+function isSignedIn(){ return isAdmin(); }
 function refreshAdminUI(){
-  const on=isSignedIn(); document.body.classList.toggle("admin",on);
-  const b=document.getElementById("adminToggle"); b.textContent=on?"Signed in — sign out":"Sign in"; b.classList.toggle("on",on);
+  const admin=isAdmin(), student=isStudent();
+  document.body.classList.toggle("admin",admin);
+  document.body.classList.toggle("viewer",student&&!admin);
+  const b=document.getElementById("adminToggle");
+  if(b){ b.textContent = admin ? "Signed in — sign out" : (student ? "Student — sign out" : "Sign in"); b.classList.toggle("on",admin||student); }
+  renderCourses();
 }
 function toggleAdmin(){
-  if(isSignedIn()){ fb.auth.signOut().then(()=>{ refreshAdminUI(); toast("Signed out."); }); }
+  if(currentUser()){ fb.auth.signOut().then(()=>{ refreshAdminUI(); if(typeof closeCourse==="function") closeCourse(); toast("Signed out."); }); }
   else openSignIn();
 }
 document.getElementById("adminToggle").addEventListener("click",toggleAdmin);
 document.getElementById("signInLink").addEventListener("click",openSignIn);
+
+/* ---- student sign-in via Google, restricted to @jaipuria.ac.in ---- */
+async function studentSignIn(afterCourseId){
+  if(!fb.ready){ toast("Not connected yet."); return; }
+  try{
+    const provider=new firebase.auth.GoogleAuthProvider();
+    provider.setCustomParameters({ hd:"jaipuria.ac.in", prompt:"select_account" });
+    const res=await fb.auth.signInWithPopup(provider);
+    const email=(res.user.email||"").toLowerCase();
+    if(!(/@jaipuria\.ac\.in$/.test(email) || email===ADMIN_EMAIL)){
+      await fb.auth.signOut();
+      accessRestricted(email);
+      return;
+    }
+    refreshAdminUI(); toast("Signed in.");
+    if(afterCourseId) openCourse(afterCourseId);
+  }catch(e){ /* popup closed / cancelled */ }
+}
+function accessRestricted(email){
+  const body=document.getElementById("modalBody");
+  body.innerHTML=`<h3>Access restricted</h3>
+    <p class="sub">Course materials are available only to Jaipuria accounts ending in <strong>@jaipuria.ac.in</strong>.${email?` The account <strong>${esc(email)}</strong> isn’t permitted.`:""}</p>
+    <div class="modal-actions"><button class="btn primary" onclick="closeModal()">OK</button></div>`;
+  document.getElementById("modalBg").classList.add("open");
+}
+function promptStudentLogin(courseId){
+  const body=document.getElementById("modalBody");
+  body.innerHTML=`<h3>Sign in to view this course</h3>
+    <p class="sub">These materials are for Jaipuria students. Sign in with your <strong>@jaipuria.ac.in</strong> Google account to continue.</p>
+    <div class="modal-actions"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="closeModal();studentSignIn('${courseId}')">Sign in with Google</button></div>`;
+  document.getElementById("modalBg").classList.add("open");
+}
+
 
 /* ---- auto sign-out after 1 minute of inactivity ---- */
 let idleTimer=null;
@@ -469,12 +528,193 @@ async function removeItem(section,id){
   }catch(e){ toast(e.message||"Delete failed."); }
 }
 
+/* =====================================================================
+   COURSES — public list (present/past), gated session content, admin CRUD
+   ===================================================================== */
+const COURSE_CACHE={};   // courseId -> {course, sessions:[{...,resources:[]}]}
+
+function renderCourses(){
+  const present=document.getElementById("present-courses");
+  const past=document.getElementById("past-courses");
+  if(!present||!past) return;
+  const courses=DATA.courses||[];
+  const pres=courses.filter(c=>c.status!=="past");
+  const pst=courses.filter(c=>c.status==="past");
+  present.innerHTML = pres.length ? pres.map(c=>courseCardHtml(c,true)).join("")
+    : `<p class="empty-note">${isAdmin()?"No present courses yet — add one below.":"No current courses listed yet."}</p>`;
+  past.innerHTML = pst.length ? pst.map(c=>courseCardHtml(c,false)).join("")
+    : `<p class="empty-note">${isAdmin()?"No past courses yet.":"—"}</p>`;
+}
+function courseCardHtml(c,isPresent){
+  const admin=isAdmin();
+  const adminBtns = admin?`<div class="row-admin"><button class="abtn" onclick="event.stopPropagation();editCourse('${c.id}')">Edit</button><button class="abtn" onclick="event.stopPropagation();toggleCourseStatus('${c.id}')">${isPresent?'→ Past':'→ Present'}</button><button class="abtn del" onclick="event.stopPropagation();deleteCourse('${c.id}')">Delete</button></div>`:"";
+  const clickAttrs = isPresent?`onclick="openCourse('${c.id}')" role="button" tabindex="0" onkeydown="if(event.key==='Enter')openCourse('${c.id}')"`:"";
+  return `<div class="course-card ${isPresent?'present':'past'}" ${clickAttrs}>
+    <div class="cc-main">
+      <p class="cc-name">${esc(c.name)}</p>
+      ${c.term?`<p class="cc-term">${esc(c.term)}</p>`:""}
+      ${isPresent?`<span class="cc-open">View sessions &rarr;</span>`:`<span class="cc-tag">Past course</span>`}
+    </div>
+    ${adminBtns}
+  </div>`;
+}
+
+async function openCourse(id){
+  const course=(DATA.courses||[]).find(c=>String(c.id)===String(id));
+  if(!course) return;
+  if(course.status==="past") return;
+  if(!canViewCourse()){ promptStudentLogin(id); return; }
+  let sessions;
+  if(Array.isArray(course.sessions)){ sessions=course.sessions; }   // preview / built-in
+  else{
+    try{
+      const ss=await fb.db.collection("courses").doc(id).collection("sessions").orderBy("sort_order").get();
+      sessions=[];
+      for(const sdoc of ss.docs){
+        const s={id:sdoc.id,...sdoc.data()};
+        const rr=await fb.db.collection("courses").doc(id).collection("sessions").doc(sdoc.id).collection("resources").orderBy("sort_order").get();
+        s.resources=rr.docs.map(r=>({id:r.id,...r.data()}));
+        sessions.push(s);
+      }
+    }catch(e){ toast("Couldn’t load course: "+(e.message||e)); return; }
+  }
+  COURSE_CACHE[id]={course,sessions};
+  renderCourseView(course,sessions);
+  location.hash="course/"+id;
+}
+function closeCourse(){
+  const cv=document.getElementById("course-view"); if(cv) cv.style.display="none";
+  const cs=document.getElementById("courses"); if(cs) cs.style.display="";
+  if(location.hash.indexOf("#course/")===0) location.hash="courses";
+}
+function renderCourseView(course,sessions){
+  const admin=isAdmin();
+  const cv=document.getElementById("course-view"); if(!cv) return;
+  const acc = sessions.length ? sessions.map(s=>sessionHtml(course.id,s,admin)).join("")
+    : `<p class="empty-note">No sessions yet.${admin?" Add the first one below.":""}</p>`;
+  cv.innerHTML=`<div class="wrap">
+    <button class="back-link" onclick="closeCourse()">&larr; Back to courses</button>
+    <h2 class="cv-title">${esc(course.name)}</h2>
+    ${course.term?`<p class="cv-term">${esc(course.term)}</p>`:""}
+    ${course.description?`<p class="cv-desc">${esc(course.description)}</p>`:""}
+    <div class="accordion">${acc}</div>
+    ${admin?`<div class="course-admin"><button class="abtn add" onclick="addSession('${course.id}',${sessions.length})">+ Add session</button></div>`:""}
+  </div>`;
+  cv.style.display="block";
+  const cs=document.getElementById("courses"); if(cs) cs.style.display="none";
+  window.scrollTo({top:Math.max(0,cv.offsetTop-70),behavior:"smooth"});
+}
+function sessionHtml(courseId,s,admin){
+  const res=(s.resources||[]).map(r=>resourceHtml(courseId,s.id,r,admin)).join("");
+  const adminS=admin?`<span class="row-admin"><button class="abtn" onclick="event.stopPropagation();editSession('${courseId}','${s.id}')">Edit</button><button class="abtn del" onclick="event.stopPropagation();deleteSession('${courseId}','${s.id}')">Delete</button></span>`:"";
+  return `<div class="acc-item">
+    <div class="acc-head" onclick="this.parentNode.classList.toggle('open')">
+      <span class="acc-num">${esc(s.number!=null?s.number:"")}</span>
+      <span class="acc-title">${esc(s.title||"Untitled session")}</span>
+      ${adminS}
+      <span class="acc-chev">&rsaquo;</span>
+    </div>
+    <div class="acc-body">
+      ${s.description?`<p class="sess-desc">${esc(s.description)}</p>`:""}
+      ${s.key_concepts?`<p class="sess-kc"><strong>Key concepts:</strong> ${esc(s.key_concepts)}</p>`:""}
+      <div class="res-list">${res||`<p class="empty-note">No resources for this session.</p>`}</div>
+      ${admin?`<div class="course-admin"><button class="abtn add" onclick="addResource('${courseId}','${s.id}',${(s.resources||[]).length})">+ Add resource</button></div>`:""}
+    </div>
+  </div>`;
+}
+function resourceHtml(courseId,sessionId,r,admin){
+  const adminR=admin?`<span class="res-admin"><button class="abtn" onclick="editResource('${courseId}','${sessionId}','${r.id}')">Edit</button><button class="abtn del" onclick="deleteResource('${courseId}','${sessionId}','${r.id}')">Delete</button></span>`:"";
+  const link=r.url?`href="${esc(r.url)}" target="_blank" rel="noopener"`:`href="#" onclick="return false"`;
+  return `<div class="res-row">
+    <a class="res-link" ${link}><span class="res-ic">${resIcon(r.title,r.url)}</span>
+      <span class="res-main"><span class="res-title">${esc(r.title||"Resource")}</span>${r.description?`<span class="res-desc">${esc(r.description)}</span>`:""}</span></a>
+    ${adminR}
+  </div>`;
+}
+function resIcon(title,url){
+  const t=((title||"")+" "+(url||"")).toLowerCase();
+  if(/\.pptx?|slides?|presentation|ppt/.test(t)) return "📊";
+  if(/\.ipynb|notebook/.test(t)) return "📓";
+  if(/\.py\b|python/.test(t)) return "🐍";
+  if(/\.xlsx?|excel|spreadsheet/.test(t)) return "📈";
+  if(/\.csv|dataset|\bdata\b/.test(t)) return "📁";
+  if(/\.pdf/.test(t)) return "📄";
+  if(/video|youtube|\.mp4/.test(t)) return "🎬";
+  return "🔗";
+}
+
+/* ---- generic form modal (course / session / resource) ---- */
+function formModal(title,fields,values,onSave){
+  const body=document.getElementById("modalBody");
+  body.innerHTML=`<h3>${esc(title)}</h3>`+
+    fields.map(f=>{
+      const v=(values&&values[f.k]!=null)?values[f.k]:(f.def!=null?f.def:"");
+      if(f.type==="textarea") return `<div class="field"><label>${esc(f.label)}</label><textarea id="fm_${f.k}">${esc(v)}</textarea></div>`;
+      if(f.type==="select") return `<div class="field"><label>${esc(f.label)}</label><select id="fm_${f.k}">${f.options.map(([o,l])=>`<option value="${o}" ${String(v)===o?'selected':''}>${l}</option>`).join("")}</select></div>`;
+      return `<div class="field"><label>${esc(f.label)}</label><input id="fm_${f.k}" type="${f.type==='number'?'number':'text'}" value="${esc(v)}"></div>`;
+    }).join("")+
+    `<div class="modal-actions"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn primary" id="fmSave">Save</button></div>`;
+  document.getElementById("modalBg").classList.add("open");
+  document.getElementById("fmSave").addEventListener("click",async()=>{
+    const obj={}; fields.forEach(f=>{ let val=document.getElementById("fm_"+f.k).value; if(f.type==="number") val=val===""?null:Number(val); obj[f.k]=val; });
+    const btn=document.getElementById("fmSave"); btn.disabled=true; btn.textContent="Saving…";
+    try{ await onSave(obj); closeModal(); toast("Saved."); }
+    catch(e){ btn.disabled=false; btn.textContent="Save"; toast(e.message||"Save failed."); }
+  });
+}
+function guardAdmin(){ if(!isAdmin()) throw new Error("Only the administrator can do this."); }
+
+/* ---- course CRUD ---- */
+const COURSE_FIELDS=[
+  {k:"name",label:"Course name",type:"text"},
+  {k:"term",label:"Term / year (optional)",type:"text"},
+  {k:"description",label:"Short description (optional)",type:"textarea"},
+  {k:"status",label:"Category",type:"select",options:[["present","Present (current)"],["past","Past"]]},
+  {k:"sort_order",label:"Order (lower shows first)",type:"number"}
+];
+function addCourse(){ formModal("Add course",COURSE_FIELDS,{status:"present",sort_order:(DATA.courses||[]).length+1},o=>saveCourse(null,o)); }
+function editCourse(id){ const c=(DATA.courses||[]).find(x=>String(x.id)===String(id)); formModal("Edit course",COURSE_FIELDS,c||{},o=>saveCourse(id,o)); }
+async function saveCourse(id,o){ guardAdmin(); const col=fb.db.collection("courses"); if(id) await col.doc(id).set(o,{merge:true}); else await col.add(o); await reloadCourses(); renderCourses(); }
+async function reloadCourses(){ if(!fb.ready) return; const snap=await fb.db.collection("courses").orderBy("sort_order").get(); DATA.courses=snap.docs.map(d=>({id:d.id,...d.data()})); }
+async function toggleCourseStatus(id){ try{ guardAdmin(); const c=(DATA.courses||[]).find(x=>String(x.id)===String(id)); await fb.db.collection("courses").doc(id).set({status:c.status==="past"?"present":"past"},{merge:true}); await reloadCourses(); renderCourses(); toast("Moved."); }catch(e){ toast(e.message); } }
+async function deleteCourse(id){ if(!confirm("Delete this course? Its sessions and resources will no longer be shown.")) return; try{ guardAdmin(); await fb.db.collection("courses").doc(id).delete(); await reloadCourses(); renderCourses(); toast("Deleted."); }catch(e){ toast(e.message); } }
+
+/* ---- session CRUD ---- */
+const SESSION_FIELDS=[
+  {k:"number",label:"Session number",type:"number"},
+  {k:"title",label:"Session title",type:"text"},
+  {k:"description",label:"Description",type:"textarea"},
+  {k:"key_concepts",label:"Key concepts covered",type:"textarea"},
+  {k:"sort_order",label:"Order",type:"number"}
+];
+function findSession(courseId,sid){ const c=COURSE_CACHE[courseId]; return c?c.sessions.find(s=>String(s.id)===String(sid)):null; }
+function addSession(courseId,count){ formModal("Add session",SESSION_FIELDS,{number:count+1,sort_order:count+1},o=>saveSession(courseId,null,o)); }
+function editSession(courseId,id){ formModal("Edit session",SESSION_FIELDS,findSession(courseId,id)||{},o=>saveSession(courseId,id,o)); }
+async function saveSession(courseId,id,o){ guardAdmin(); const col=fb.db.collection("courses").doc(courseId).collection("sessions"); if(id) await col.doc(id).set(o,{merge:true}); else await col.add(o); await openCourse(courseId); }
+async function deleteSession(courseId,id){ if(!confirm("Delete this session and its resources?")) return; try{ guardAdmin(); await fb.db.collection("courses").doc(courseId).collection("sessions").doc(id).delete(); await openCourse(courseId); toast("Deleted."); }catch(e){ toast(e.message); } }
+
+/* ---- resource CRUD ---- */
+const RESOURCE_FIELDS=[
+  {k:"title",label:"Resource title (e.g. 📊 Intro – Lecture Slides)",type:"text"},
+  {k:"description",label:"Description (optional)",type:"text"},
+  {k:"url",label:"Link (Google Drive share link, etc.)",type:"text"},
+  {k:"sort_order",label:"Order",type:"number"}
+];
+function findResource(courseId,sid,rid){ const s=findSession(courseId,sid); return s&&s.resources?s.resources.find(r=>String(r.id)===String(rid)):null; }
+function addResource(courseId,sid,count){ formModal("Add resource",RESOURCE_FIELDS,{sort_order:count+1},o=>saveResource(courseId,sid,null,o)); }
+function editResource(courseId,sid,rid){ formModal("Edit resource",RESOURCE_FIELDS,findResource(courseId,sid,rid)||{},o=>saveResource(courseId,sid,rid,o)); }
+async function saveResource(courseId,sid,rid,o){ guardAdmin(); const col=fb.db.collection("courses").doc(courseId).collection("sessions").doc(sid).collection("resources"); if(rid) await col.doc(rid).set(o,{merge:true}); else await col.add(o); await openCourse(courseId); }
+async function deleteResource(courseId,sid,rid){ if(!confirm("Delete this resource?")) return; try{ guardAdmin(); await fb.db.collection("courses").doc(courseId).collection("sessions").doc(sid).collection("resources").doc(rid).delete(); await openCourse(courseId); toast("Deleted."); }catch(e){ toast(e.message); } }
+
+function handleHash(){ const h=(location.hash||"").replace(/^#/,""); if(h.indexOf("course/")===0){ openCourse(h.split("/")[1]); } }
+window.addEventListener("hashchange",()=>{ const h=(location.hash||"").replace(/^#/,""); if(h==="courses"||h===""){ const cv=document.getElementById("course-view"); if(cv&&cv.style.display==="block") closeCourse(); } });
+
 /* ---------- boot ---------- */
 (async function boot(){
   initFirebase();
   LIVE=await loadLive();
   renderAll();
   refreshAdminUI();
-  // Firebase restores a previous sign-in asynchronously; update the UI when it does.
-  if(fb.ready){ fb.auth.onAuthStateChanged(async ()=>{ refreshAdminUI(); resetIdle(); if(isSignedIn() && await loadLive()) renderAll(); }); }
+  handleHash();
+  if(fb.ready){ fb.auth.onAuthStateChanged(async ()=>{ refreshAdminUI(); resetIdle(); if(isAdmin() && await loadLive()) renderAll(); }); }
 })();

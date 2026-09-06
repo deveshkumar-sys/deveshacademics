@@ -19,7 +19,7 @@
 
 <header class="nav">
   <div class="wrap nav-inner">
-    <span class="nav-name">Academic Profile</span>
+    <span class="nav-name">Devesh Kumar</span>
     <nav class="nav-links">
       <a href="#education">Education</a>
       <a href="#about">About</a>
@@ -28,6 +28,7 @@
       <a href="#reviewing">Reviewing</a>
       <a href="#awards">Awards</a>
       <a href="#publications">Publications</a>
+      <a href="#courses">Courses</a>
       <button id="adminToggle" title="Sign in to edit">Sign in</button>
     </nav>
   </div>
@@ -115,7 +116,23 @@
       <div class="adminctl"><button class="abtn add" onclick="openForm('publications')">+ Add a publication</button></div>
     </div>
   </section>
+
+  <!-- 8. COURSES -->
+  <section class="block" id="courses">
+    <div class="wrap">
+      <div class="sec-head"><h2>Courses</h2></div>
+      <h3 class="courses-sub">Present courses</h3>
+      <p class="courses-hint">Click a course to sign in with your <strong>@jaipuria.ac.in</strong> account and view its sessions and materials.</p>
+      <div class="course-grid" id="present-courses"></div>
+      <div class="adminctl"><button class="abtn add" onclick="addCourse()">+ Add course</button></div>
+      <h3 class="courses-sub past">Past courses</h3>
+      <div class="course-grid" id="past-courses"></div>
+    </div>
+  </section>
 </main>
+
+<!-- Course dashboard (opens when a present course is selected) -->
+<section class="course-view" id="course-view" style="display:none"></section>
 
 <footer>
   <div class="wrap">
