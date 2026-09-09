@@ -92,6 +92,11 @@ const FALLBACK = {
     {id:20, sort_order:20, kind:"other", year:2025, title:"Industry 4.0 and Supply Chain Resilience: A Comprehensive Analysis of Technological Impacts", authors:"Kumar, D., Soni, G.", venue:"IETI Transactions on Data Analysis and Forecasting, 3(2), 33–49", metrics:"", url:"https://scholar.google.com/scholar?q=Industry+4.0+and+Supply+Chain+Resilience+Comprehensive+Analysis+of+Technological+Impacts"},
     {id:21, sort_order:21, kind:"other", year:2024, title:"Improved demand forecasting of a retail store using a hybrid machine learning model", authors:"Taparia, V., Mishra, P., Gupta, N., Kumar, D.", venue:"Journal of Graphic Era University, 15–36", metrics:"", url:"https://scholar.google.com/scholar?q=Improved+demand+forecasting+of+a+retail+store+using+a+hybrid+machine+learning+model"}
   ],
+  activities: [
+    {id:"a1", sort_order:1, date:"Feb 2026", title:"Attended the International Conference on AI Disruption and Opportunities", description:"Jaipuria Institute of Management, Jaipur.", url:""},
+    {id:"a2", sort_order:2, date:"Jan 2026", title:"Joined Jaipuria Institute of Management, Lucknow as Assistant Professor — Business Analytics", description:"", url:""},
+    {id:"a3", sort_order:3, date:"2026", title:"New paper in Energy Economics on carbon-neutral logistics (Impact Factor 14.1)", description:"Carbon neutrality through Industry 4.0.", url:"https://scholar.google.com/scholar?q=Carbon+neutrality+through+industry+4.0+sustainable+energy+efficient+logistics+operations"}
+  ],
   courses: [
     {id:"sample-ba", sort_order:1, status:"present", name:"Python for Business Analytics", term:"Current term", description:"Hands-on introduction to analytics with Python.", sessions:[
       {id:"s1", sort_order:1, number:1, title:"Introduction to Business Analytics", description:"What analytics is and why it matters for decision-making.", key_concepts:"Descriptive, predictive and prescriptive analytics", resources:[
@@ -134,7 +139,11 @@ const SCHEMA = {
     {k:"venue",label:"Venue / journal / book",type:"text"},{k:"year",label:"Year",type:"number"},
     {k:"kind",label:"Type",type:"select",options:[["journal","Journal article"],["conference","Conference paper"],["book","Book / chapter"],["other","Other"]]},
     {k:"metrics",label:"Metrics (e.g. ABDC:A|IF:7.3|Q1)",type:"text"},
-    {k:"url",label:"Link to publisher / DOI",type:"text"},{k:"sort_order",label:"Order",type:"number"}]}
+    {k:"url",label:"Link to publisher / DOI",type:"text"},{k:"sort_order",label:"Order",type:"number"}]},
+  activities:{table:"activities", fields:[
+    {k:"date",label:"Date (e.g. Feb 2026)",type:"text"},{k:"title",label:"What happened",type:"text"},
+    {k:"description",label:"Details (optional)",type:"textarea"},{k:"url",label:"Link (optional)",type:"text"},
+    {k:"sort_order",label:"Order (lower shows first)",type:"number"}]}
 };
 const PUB_KINDS=[["all","All"],["journal","Journal articles"],["conference","Conference papers"],["book","Books & chapters"],["other","Other"]];
 
@@ -146,7 +155,7 @@ const esc = s => (s==null?"":String(s)).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"
 /* ---------- Firebase (data + login) ----------
    Reads are public (security rules allow anyone to read).
    Writes require you to be signed in as the owner (rules enforce it). */
-const COLLECTIONS = ["education","positions","conferences","reviewer_journals","awards","publications"];
+const COLLECTIONS = ["education","positions","conferences","reviewer_journals","awards","publications","activities"];
 let fb = { ready:false, db:null, auth:null };
 
 function initFirebase(){
@@ -178,7 +187,7 @@ async function loadLive(){
     try{ const cs=await fb.db.collection("courses").orderBy("sort_order").get(); courses=cs.docs.map(d=>({id:d.id,...d.data()})); }catch(e){ courses=DATA.courses||[]; }
     DATA = {profile:out.profile, education:out.education||[], positions:out.positions||[],
             conferences:out.conferences||[], reviewer_journals:out.reviewer_journals||[],
-            awards:out.awards||[], publications:out.publications||[], courses:courses};
+            awards:out.awards||[], publications:out.publications||[], activities:out.activities||[], courses:courses};
     return true;
   }catch(e){ console.warn("Firestore read failed, using built-in copy:",e.message); return false; }
 }
@@ -193,7 +202,23 @@ async function fbSet(collection, id, data){
 async function fbDelete(collection, id){ return fb.db.collection(collection).doc(String(id)).delete(); }
 
 /* ---------- render ---------- */
-function renderAll(){ renderProfile(); renderEducation(); renderPositions(); renderConferences(); renderReviewers(); renderAwards(); renderPublications(); renderCourses(); }
+function renderAll(){ renderProfile(); renderActivities(); renderEducation(); renderPositions(); renderConferences(); renderReviewers(); renderAwards(); renderPublications(); renderCourses(); }
+function renderActivities(){
+  const el=document.getElementById("list-activities"); if(!el) return;
+  const items=DATA.activities||[];
+  el.innerHTML = items.length ? items.map(a=>{
+    const title = a.url ? `<a href="${esc(a.url)}" target="_blank" rel="noopener">${esc(a.title)}</a>` : esc(a.title);
+    return `<div class="row">
+      <div class="row-main">
+        <p class="row-title">${title}</p>
+        ${a.description?`<p class="row-sub">${esc(a.description)}</p>`:""}
+      </div>
+      <div class="row-side">${esc(a.date||"")}</div>
+      ${adminRow('activities',a.id)}
+    </div>`;
+  }).join("") : `<p class="empty-note">${isAdmin()?"No activity yet — add your first update below.":"No recent activity yet."}</p>`;
+  const c=document.getElementById("c-activities"); if(c) c.textContent=items.length+(items.length===1?" update":" updates");
+}
 
 function renderProfile(){
   const p=DATA.profile;
@@ -215,23 +240,42 @@ function renderProfile(){
   document.getElementById("aboutBody").innerHTML=(p.about||"").split(/\n\n+/).map(par=>`<p class="lead">${esc(par)}</p>`).join("");
   document.getElementById("interests").innerHTML=(p.interests||[]).map(t=>`<span class="tag">${esc(t)}</span>`).join("");
 }
+function deriveHighlights(){
+  const pubs=DATA.publications||[]; const out=[];
+  if(pubs.length) out.push({num:pubs.length+"+",label:"Publications"});
+  let topIF=0; pubs.forEach(x=>{ (x.metrics||"").split("|").forEach(m=>{ const[k,v]=m.split(":"); if(k==="IF"){ const n=parseFloat(v); if(n>topIF) topIF=n; } }); });
+  if(topIF) out.push({num:topIF.toFixed(1),label:"Peak impact factor"});
+  const rev=(DATA.reviewer_journals||[]).length; if(rev) out.push({num:rev,label:"Journals reviewed"});
+  return out;
+}
 function renderHeroBanner(p){
   const el=document.getElementById("heroBanner"); if(!el) return;
-  // key highlights derived from the live data
-  const pubs=DATA.publications||[];
-  const pubCount=pubs.length;
-  let topIF=0;
-  pubs.forEach(x=>{ (x.metrics||"").split("|").forEach(m=>{ const[k,v]=m.split(":"); if(k==="IF"){ const n=parseFloat(v); if(n>topIF) topIF=n; } }); });
-  const revCount=(DATA.reviewer_journals||[]).length;
-  const stats=[];
-  if(pubCount) stats.push([pubCount+"+","Publications"]);
-  if(topIF)   stats.push([topIF.toFixed(1),"Peak impact factor"]);
-  if(revCount) stats.push([revCount,"Journals reviewed"]);
-  const pillars=(p.interests||[]).slice(0,4).map(t=>`<span class="hb-pill">${esc(t)}</span>`).join("");
+  const stats = (Array.isArray(p.highlights)&&p.highlights.length) ? p.highlights : deriveHighlights();
+  const pillars=(p.interests||[]).slice(0,6).map(t=>`<span class="hb-pill">${esc(t)}</span>`).join("");
   el.innerHTML=`
     ${p.tagline?`<p class="hb-tagline">${esc(p.tagline)}</p>`:""}
-    ${stats.length?`<div class="hb-stats">${stats.map(([n,l])=>`<div class="hb-stat"><span class="hb-num">${esc(n)}</span><span class="hb-lab">${esc(l)}</span></div>`).join("")}</div>`:""}
-    ${pillars?`<div class="hb-pillars">${pillars}</div>`:""}`;
+    ${stats.length?`<div class="hb-stats">${stats.map(s=>`<div class="hb-stat"><span class="hb-num">${esc(s.num)}</span><span class="hb-lab">${esc(s.label)}</span></div>`).join("")}</div>`:""}
+    ${pillars?`<div class="hb-pillars">${pillars}</div>`:""}
+    <div class="adminctl hb-admin"><button class="abtn" onclick="editHighlights()">Edit highlights &amp; tagline</button></div>`;
+}
+function editHighlights(){
+  const p=DATA.profile;
+  const hl=(Array.isArray(p.highlights)&&p.highlights.length)?p.highlights:deriveHighlights();
+  const linesText=hl.map(h=>`${h.num} | ${h.label}`).join("\n");
+  formModal("Edit highlight banner",[
+    {k:"tagline",label:"Tagline (one line)",type:"textarea"},
+    {k:"highlights",label:"Highlight stats — one per line as:  number | label",type:"textarea"},
+    {k:"interests",label:"Research pillars (comma separated)",type:"textarea"}
+  ],{tagline:p.tagline||"",highlights:linesText,interests:(p.interests||[]).join(", ")},async o=>{
+    guardAdmin();
+    const patch={
+      tagline:o.tagline||"",
+      highlights:(o.highlights||"").split(/\n+/).map(l=>l.trim()).filter(Boolean).map(l=>{const i=l.indexOf("|");return i<0?{num:l.trim(),label:""}:{num:l.slice(0,i).trim(),label:l.slice(i+1).trim()};}).filter(h=>h.num||h.label),
+      interests:(o.interests||"").split(",").map(s=>s.trim()).filter(Boolean)
+    };
+    await fbSet("profile","main",patch);
+    DATA.profile={...DATA.profile,...patch}; renderProfile();
+  });
 }
 function adminRow(section,id){ return `<div class="row-admin"><button class="abtn" onclick="openForm('${section}','${id}')">Edit</button><button class="abtn del" onclick="removeItem('${section}','${id}')">Delete</button></div>`; }
 function setCount(section,n){ const el=document.getElementById("c-"+section); if(el) el.textContent=n+(n===1?" entry":" entries"); }
@@ -664,6 +708,19 @@ function formModal(title,fields,values,onSave){
 }
 function guardAdmin(){ if(!isAdmin()) throw new Error("Only the administrator can do this."); }
 
+/* ---- collapsible sections (click a heading to expand / collapse) ---- */
+function initCollapsible(){
+  document.querySelectorAll("section.block").forEach(sec=>{
+    const head=sec.querySelector(".sec-head");
+    if(!head || head.dataset.collap) return;
+    head.dataset.collap="1";
+    const chev=document.createElement("span"); chev.className="sec-toggle"; chev.innerHTML="&rsaquo;";
+    head.appendChild(chev);
+    head.addEventListener("click",e=>{ if(e.target.closest("button,a,.row-admin")) return; sec.classList.toggle("collapsed"); });
+    sec.classList.add("collapsed");   // start collapsed
+  });
+}
+
 /* ---- course CRUD ---- */
 const COURSE_FIELDS=[
   {k:"name",label:"Course name",type:"text"},
@@ -714,6 +771,7 @@ window.addEventListener("hashchange",()=>{ const h=(location.hash||"").replace(/
   initFirebase();
   LIVE=await loadLive();
   renderAll();
+  initCollapsible();
   refreshAdminUI();
   handleHash();
   if(fb.ready){ fb.auth.onAuthStateChanged(async ()=>{ refreshAdminUI(); resetIdle(); if(isAdmin() && await loadLive()) renderAll(); }); }

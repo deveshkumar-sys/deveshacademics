@@ -247,3 +247,12 @@ body.admin .course-admin{display:block}
   .acc-body{padding-left:20px}
   .cv-title{font-size:24px}
 }
+
+/* ===================== COLLAPSIBLE SECTIONS ===================== */
+.block .sec-head{cursor:pointer}
+.sec-toggle{margin-left:auto;color:var(--ink-faint);font-size:26px;line-height:1;transition:transform .2s ease;flex:none;align-self:center}
+.block:not(.collapsed) .sec-toggle{transform:rotate(90deg)}
+.block.collapsed{padding-top:28px;padding-bottom:28px}
+.block.collapsed .wrap > *:not(.sec-head){display:none}
+.block.collapsed .sec-head{margin-bottom:0}
+.hb-admin{margin-top:16px}
