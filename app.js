@@ -717,9 +717,17 @@ function initCollapsible(){
     const chev=document.createElement("span"); chev.className="sec-toggle"; chev.innerHTML="&rsaquo;";
     head.appendChild(chev);
     head.addEventListener("click",e=>{ if(e.target.closest("button,a,.row-admin")) return; sec.classList.toggle("collapsed"); });
-    sec.classList.add("collapsed");   // start collapsed
+    if(sec.id!=="about") sec.classList.add("collapsed");   // About stays open; the rest start collapsed
   });
 }
+/* ---- put the sections in the order the owner wants ---- */
+function reorderSections(){
+  const main=document.querySelector("main"); if(!main) return;
+  ["about","activity","courses","education","positions","conferences","reviewing","awards","publications"]
+    .forEach(id=>{ const el=document.getElementById(id); if(el && el.parentNode===main) main.appendChild(el); });
+}
+/* ---- Home (brand) click: return to the top / close a course ---- */
+function goHome(){ if(typeof closeCourse==="function") closeCourse(); if(location.hash) history.replaceState(null,"",location.pathname+location.search); window.scrollTo({top:0,behavior:"smooth"}); }
 
 /* ---- course CRUD ---- */
 const COURSE_FIELDS=[
@@ -771,6 +779,7 @@ window.addEventListener("hashchange",()=>{ const h=(location.hash||"").replace(/
   initFirebase();
   LIVE=await loadLive();
   renderAll();
+  reorderSections();
   initCollapsible();
   refreshAdminUI();
   handleHash();
