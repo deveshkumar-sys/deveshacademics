@@ -97,6 +97,8 @@ const FALLBACK = {
     {id:"a2", sort_order:2, date:"Jan 2026", title:"Joined Jaipuria Institute of Management, Lucknow as Assistant Professor — Business Analytics", description:"", url:""},
     {id:"a3", sort_order:3, date:"2026", title:"New paper in Energy Economics on carbon-neutral logistics (Impact Factor 14.1)", description:"Carbon neutrality through Industry 4.0.", url:"https://scholar.google.com/scholar?q=Carbon+neutrality+through+industry+4.0+sustainable+energy+efficient+logistics+operations"}
   ],
+  talks: [],
+  gallery: [],
   courses: [
     {id:"sample-ba", sort_order:1, status:"present", name:"Python for Business Analytics", term:"Current term", description:"Hands-on introduction to analytics with Python.", sessions:[
       {id:"s1", sort_order:1, number:1, title:"Introduction to Business Analytics", description:"What analytics is and why it matters for decision-making.", key_concepts:"Descriptive, predictive and prescriptive analytics", resources:[
@@ -143,7 +145,14 @@ const SCHEMA = {
   activities:{table:"activities", fields:[
     {k:"date",label:"Date (e.g. Feb 2026)",type:"text"},{k:"title",label:"What happened",type:"text"},
     {k:"description",label:"Details (optional)",type:"textarea"},{k:"url",label:"Link (optional)",type:"text"},
-    {k:"sort_order",label:"Order (lower shows first)",type:"number"}]}
+    {k:"sort_order",label:"Order (lower shows first)",type:"number"}]},
+  talks:{table:"talks", fields:[
+    {k:"date",label:"Date (e.g. Nov 2025)",type:"text"},{k:"title",label:"Talk / lecture title",type:"text"},
+    {k:"venue",label:"Venue / event",type:"text"},{k:"description",label:"Details (optional)",type:"textarea"},
+    {k:"url",label:"Link (optional)",type:"text"},{k:"sort_order",label:"Order",type:"number"}]},
+  gallery:{table:"gallery", fields:[
+    {k:"url",label:"Photo link (GitHub image URL)",type:"text"},{k:"caption",label:"Caption (optional)",type:"text"},
+    {k:"sort_order",label:"Order",type:"number"}]}
 };
 const PUB_KINDS=[["all","All"],["journal","Journal articles"],["conference","Conference papers"],["book","Books & chapters"],["other","Other"]];
 
@@ -155,7 +164,7 @@ const esc = s => (s==null?"":String(s)).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"
 /* ---------- Firebase (data + login) ----------
    Reads are public (security rules allow anyone to read).
    Writes require you to be signed in as the owner (rules enforce it). */
-const COLLECTIONS = ["education","positions","conferences","reviewer_journals","awards","publications","activities"];
+const COLLECTIONS = ["education","positions","conferences","reviewer_journals","awards","publications","activities","talks","gallery"];
 let fb = { ready:false, db:null, auth:null };
 
 function initFirebase(){
@@ -187,7 +196,7 @@ async function loadLive(){
     try{ const cs=await fb.db.collection("courses").orderBy("sort_order").get(); courses=cs.docs.map(d=>({id:d.id,...d.data()})); }catch(e){ courses=DATA.courses||[]; }
     DATA = {profile:out.profile, education:out.education||[], positions:out.positions||[],
             conferences:out.conferences||[], reviewer_journals:out.reviewer_journals||[],
-            awards:out.awards||[], publications:out.publications||[], activities:out.activities||[], courses:courses};
+            awards:out.awards||[], publications:out.publications||[], activities:out.activities||[], talks:out.talks||[], gallery:out.gallery||[], courses:courses};
     return true;
   }catch(e){ console.warn("Firestore read failed, using built-in copy:",e.message); return false; }
 }
@@ -202,7 +211,50 @@ async function fbSet(collection, id, data){
 async function fbDelete(collection, id){ return fb.db.collection(collection).doc(String(id)).delete(); }
 
 /* ---------- render ---------- */
-function renderAll(){ renderProfile(); renderActivities(); renderEducation(); renderPositions(); renderConferences(); renderReviewers(); renderAwards(); renderPublications(); renderCourses(); }
+function renderAll(){ renderProfile(); renderActivities(); renderTalks(); renderEducation(); renderPositions(); renderConferences(); renderReviewers(); renderAwards(); renderPublications(); renderCourses(); }
+
+let carouselTimer=null;
+function renderGallery(){
+  const holder=document.getElementById("portraitHolder"); if(!holder) return;
+  const p=DATA.profile;
+  const imgs=(DATA.gallery||[]).filter(g=>g&&g.url);
+  if(carouselTimer){ clearInterval(carouselTimer); carouselTimer=null; }
+  if(imgs.length){
+    holder.innerHTML=`<div class="portrait carousel">${imgs.map((g,i)=>`<img class="cslide${i===0?' on':''}" src="${esc(g.url)}" alt="${esc(g.caption||p.name)}">`).join("")}</div>`;
+    if(imgs.length>1){
+      let i=0; const slides=holder.querySelectorAll(".cslide");
+      carouselTimer=setInterval(()=>{ slides[i].classList.remove("on"); i=(i+1)%slides.length; slides[i].classList.add("on"); },4000);
+    }
+  } else if(p.photo_url){
+    holder.innerHTML=`<img class="portrait" src="${esc(p.photo_url)}" alt="${esc(p.name)}">`;
+  } else {
+    const initials=(p.name||"").replace(/^Dr\.?\s*/,"").split(/\s+/).map(w=>w[0]).join("").slice(0,2);
+    holder.innerHTML=`<div class="portrait portrait-fallback">${esc(initials)}</div>`;
+  }
+  // admin manager
+  const adm=document.getElementById("galleryAdmin");
+  if(adm){
+    adm.innerHTML=(DATA.gallery||[]).map(g=>`<div class="grow"><span class="gname">${esc(g.caption||g.url||"(no link)")}</span>${adminRow('gallery',g.id)}</div>`).join("")
+      +`<button class="abtn add" onclick="openForm('gallery')">+ Add photo</button>`;
+  }
+}
+function renderTalks(){
+  const el=document.getElementById("list-talks"); if(!el) return;
+  const items=DATA.talks||[];
+  el.innerHTML = items.length ? items.map(t=>{
+    const title=t.url?`<a href="${esc(t.url)}" target="_blank" rel="noopener">${esc(t.title)}</a>`:esc(t.title);
+    return `<div class="row">
+      <div class="row-main">
+        <p class="row-title">${title}</p>
+        ${t.venue?`<p class="row-sub">${esc(t.venue)}</p>`:""}
+        ${t.description?`<p class="row-sub">${esc(t.description)}</p>`:""}
+      </div>
+      <div class="row-side">${esc(t.date||"")}</div>
+      ${adminRow('talks',t.id)}
+    </div>`;
+  }).join("") : `<p class="empty-note">${isAdmin()?"No talks yet — add your first below.":"No talks listed yet."}</p>`;
+  const c=document.getElementById("c-talks"); if(c) c.textContent=items.length+(items.length===1?" talk":" talks");
+}
 function renderActivities(){
   const el=document.getElementById("list-activities"); if(!el) return;
   const items=DATA.activities||[];
@@ -227,9 +279,7 @@ function renderProfile(){
   document.getElementById("heroPlace").textContent=p.place;
   document.getElementById("footName").textContent=p.name;
   document.getElementById("footYear").textContent="© "+new Date().getFullYear();
-  const holder=document.getElementById("portraitHolder");
-  if(p.photo_url){ holder.innerHTML=`<img class="portrait" src="${esc(p.photo_url)}" alt="${esc(p.name)}">`; }
-  else{ const initials=p.name.replace(/^Dr\.?\s*/,"").split(/\s+/).map(w=>w[0]).join("").slice(0,2); holder.innerHTML=`<div class="portrait portrait-fallback">${esc(initials)}</div>`; }
+  renderGallery();
   const mail = p.email?`<a class="chip" href="mailto:${esc(p.email)}">${icon('mail')}${esc(p.email)}</a>`:"";
   const sch = p.scholar_url?`<a class="chip" href="${esc(p.scholar_url)}" target="_blank" rel="noopener">${icon('scholar')}Google Scholar</a>`:"";
   const li = p.linkedin_url?`<a class="chip" href="${esc(p.linkedin_url)}" target="_blank" rel="noopener">${icon('link')}LinkedIn</a>`:"";
@@ -709,21 +759,37 @@ function formModal(title,fields,values,onSave){
 function guardAdmin(){ if(!isAdmin()) throw new Error("Only the administrator can do this."); }
 
 /* ---- collapsible sections (click a heading to expand / collapse) ---- */
+const SECTION_META={
+  about:{icon:"ti-user",preview:"Background and research focus"},
+  activity:{icon:"ti-clock",preview:"Latest talks, papers and milestones"},
+  courses:{icon:"ti-book",preview:"Teaching and course materials"},
+  education:{icon:"ti-school",preview:"B.Tech → M.Tech → PhD, MNIT Jaipur"},
+  positions:{icon:"ti-briefcase",preview:"Current and past academic roles"},
+  conferences:{icon:"ti-microphone-2",preview:"Conferences and workshops attended"},
+  reviewing:{icon:"ti-checkbox",preview:"Journals I review for"},
+  awards:{icon:"ti-award",preview:"Fellowships and honours"},
+  publications:{icon:"ti-file-text",preview:"Journals, conferences and book chapters"},
+  talks:{icon:"ti-presentation",preview:"Invited talks and guest lectures"}
+};
 function initCollapsible(){
   document.querySelectorAll("section.block").forEach(sec=>{
     const head=sec.querySelector(".sec-head");
     if(!head || head.dataset.collap) return;
     head.dataset.collap="1";
+    const meta=SECTION_META[sec.id]||{icon:"ti-point",preview:""};
+    const ic=document.createElement("span"); ic.className="sec-ic"; ic.innerHTML=`<i class="ti ${meta.icon}"></i>`;
+    head.insertBefore(ic, head.firstChild);
+    if(meta.preview){ const pv=document.createElement("span"); pv.className="sec-preview"; pv.textContent=meta.preview; head.appendChild(pv); }
     const chev=document.createElement("span"); chev.className="sec-toggle"; chev.innerHTML="&rsaquo;";
     head.appendChild(chev);
     head.addEventListener("click",e=>{ if(e.target.closest("button,a,.row-admin")) return; sec.classList.toggle("collapsed"); });
-    if(sec.id!=="about") sec.classList.add("collapsed");   // About stays open; the rest start collapsed
+    if(sec.id!=="about") sec.classList.add("collapsed");
   });
 }
 /* ---- put the sections in the order the owner wants ---- */
 function reorderSections(){
   const main=document.querySelector("main"); if(!main) return;
-  ["about","activity","courses","education","positions","conferences","reviewing","awards","publications"]
+  ["about","activity","courses","education","positions","conferences","reviewing","awards","publications","talks"]
     .forEach(id=>{ const el=document.getElementById(id); if(el && el.parentNode===main) main.appendChild(el); });
 }
 /* ---- Home (brand) click: return to the top / close a course ---- */
