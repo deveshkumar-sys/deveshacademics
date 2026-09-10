@@ -458,15 +458,21 @@ function refreshAdminUI(){
   document.body.classList.toggle("admin",admin);
   document.body.classList.toggle("viewer",student&&!admin);
   const b=document.getElementById("adminToggle");
-  if(b){ b.textContent = admin ? "Signed in — sign out" : (student ? "Student — sign out" : "Sign in"); b.classList.toggle("on",admin||student); }
+  if(b){ b.textContent = admin ? "Sign out (admin)" : (student ? "Sign out" : "Sign in"); b.classList.toggle("on",admin||student); }
   renderCourses();
 }
 function toggleAdmin(){
   if(currentUser()){ fb.auth.signOut().then(()=>{ refreshAdminUI(); if(typeof closeCourse==="function") closeCourse(); toast("Signed out."); }); }
-  else openSignIn();
+  else studentSignIn();              // the visible button is the STUDENT sign-in
 }
 document.getElementById("adminToggle").addEventListener("click",toggleAdmin);
-document.getElementById("signInLink").addEventListener("click",openSignIn);
+const _sil=document.getElementById("signInLink"); if(_sil) _sil.addEventListener("click",openSignIn);
+
+/* ---- hidden admin sign-in (not shown to visitors) ----
+   Three private ways in: visit the URL with #admin, press Ctrl+Shift+A,
+   or click the "Home" title 5 times quickly. All open the admin login. */
+function openAdminSignIn(){ openSignIn(); }
+window.addEventListener("keydown",e=>{ if(e.ctrlKey && e.shiftKey && (e.key==="a"||e.key==="A")){ e.preventDefault(); openAdminSignIn(); } });
 
 /* ---- student sign-in via Google, restricted to @jaipuria.ac.in ---- */
 async function studentSignIn(afterCourseId){
@@ -793,7 +799,12 @@ function reorderSections(){
     .forEach(id=>{ const el=document.getElementById(id); if(el && el.parentNode===main) main.appendChild(el); });
 }
 /* ---- Home (brand) click: return to the top / close a course ---- */
-function goHome(){ if(typeof closeCourse==="function") closeCourse(); if(location.hash) history.replaceState(null,"",location.pathname+location.search); window.scrollTo({top:0,behavior:"smooth"}); }
+let _brandClicks=0,_brandTimer=null;
+function goHome(){
+  _brandClicks++; clearTimeout(_brandTimer); _brandTimer=setTimeout(()=>_brandClicks=0,1200);
+  if(_brandClicks>=5){ _brandClicks=0; openAdminSignIn(); return; }
+  if(typeof closeCourse==="function") closeCourse(); if(location.hash) history.replaceState(null,"",location.pathname+location.search); window.scrollTo({top:0,behavior:"smooth"});
+}
 
 /* ---- course CRUD ---- */
 const COURSE_FIELDS=[
@@ -837,8 +848,8 @@ function editResource(courseId,sid,rid){ formModal("Edit resource",RESOURCE_FIEL
 async function saveResource(courseId,sid,rid,o){ guardAdmin(); const col=fb.db.collection("courses").doc(courseId).collection("sessions").doc(sid).collection("resources"); if(rid) await col.doc(rid).set(o,{merge:true}); else await col.add(o); await openCourse(courseId); }
 async function deleteResource(courseId,sid,rid){ if(!confirm("Delete this resource?")) return; try{ guardAdmin(); await fb.db.collection("courses").doc(courseId).collection("sessions").doc(sid).collection("resources").doc(rid).delete(); await openCourse(courseId); toast("Deleted."); }catch(e){ toast(e.message); } }
 
-function handleHash(){ const h=(location.hash||"").replace(/^#/,""); if(h.indexOf("course/")===0){ openCourse(h.split("/")[1]); } }
-window.addEventListener("hashchange",()=>{ const h=(location.hash||"").replace(/^#/,""); if(h==="courses"||h===""){ const cv=document.getElementById("course-view"); if(cv&&cv.style.display==="block") closeCourse(); } });
+function handleHash(){ const h=(location.hash||"").replace(/^#/,""); if(h==="admin"){ history.replaceState(null,"",location.pathname+location.search); openAdminSignIn(); return; } if(h.indexOf("course/")===0){ openCourse(h.split("/")[1]); } }
+window.addEventListener("hashchange",()=>{ const h=(location.hash||"").replace(/^#/,""); if(h==="admin"){ history.replaceState(null,"",location.pathname+location.search); openAdminSignIn(); return; } if(h==="courses"||h===""){ const cv=document.getElementById("course-view"); if(cv&&cv.style.display==="block") closeCourse(); } });
 
 /* ---------- boot ---------- */
 (async function boot(){
