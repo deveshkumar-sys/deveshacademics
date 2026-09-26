@@ -432,9 +432,9 @@ function icon(n){
   let s="";
   for(let i=0;i<N;i++)for(let j=i+1;j<N;j++){
     const d=Math.hypot(pts[i].x-pts[j].x,pts[i].y-pts[j].y);
-    if(d<128) s+=`<line x1="${pts[i].x.toFixed(1)}" y1="${pts[i].y.toFixed(1)}" x2="${pts[j].x.toFixed(1)}" y2="${pts[j].y.toFixed(1)}" stroke="#9DB4FF" stroke-opacity="${(0.22*(1-d/128)).toFixed(3)}" stroke-width="1"/>`;
+    if(d<128) s+=`<line x1="${pts[i].x.toFixed(1)}" y1="${pts[i].y.toFixed(1)}" x2="${pts[j].x.toFixed(1)}" y2="${pts[j].y.toFixed(1)}" stroke="#C9B38A" stroke-opacity="${(0.20*(1-d/128)).toFixed(3)}" stroke-width="1"/>`;
   }
-  for(const p of pts) s+=`<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="2.1" fill="#B9C8FF" fill-opacity="0.5"/>`;
+  for(const p of pts) s+=`<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="2.1" fill="#E0CE9E" fill-opacity="0.5"/>`;
   svg.innerHTML=s;
 })();
 
